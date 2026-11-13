@@ -237,23 +237,107 @@ case "${INSTALL_OLLAMA}" in
   1|true|yes|YES|TRUE) install_ollama="1" ;;
 esac
 
+# Install a Debian/Ubuntu package the same way `gh` is installed (root or passwordless sudo).
+apt_install() {
+  pkg=$1
+  if command -v apt-get >/dev/null 2>&1; then
+    :
+  else
+    return 1
+  fi
+  log "Installing $pkg ..."
+  if [ "$(id -u)" -eq 0 ]; then
+    apt-get update && apt-get install -y "$pkg"
+  elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+    sudo -n apt-get update && sudo -n apt-get install -y "$pkg"
+  else
+    log "Cannot auto-install $pkg (sudo would need a password). Run: sudo apt-get update && sudo apt-get install -y $pkg"
+    return 1
+  fi
+}
+
+# Ollama's official installer needs zstd to extract on current Debian (Chromebook/Crostini).
+ensure_zstd() {
+  if command -v zstd >/dev/null 2>&1; then
+    return 0
+  fi
+  log "zstd is required to install Ollama."
+  apt_install zstd || return 1
+  hash -r 2>/dev/null || true
+  command -v zstd >/dev/null 2>&1
+}
+
+install_ollama_once() {
+  export PATH="/usr/local/bin:$PATH"
+  if [ "$(id -u)" -eq 0 ]; then
+    curl -fsSL https://ollama.com/install.sh | sh
+  elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+    curl -fsSL https://ollama.com/install.sh | sudo -n sh
+  else
+    log "Cannot auto-install Ollama (sudo would need a password). Install it yourself with:"
+    log "  sudo apt-get install -y zstd"
+    log "  curl -fsSL https://ollama.com/install.sh | sh"
+    return 1
+  fi
+}
+
 ensure_ollama() {
+  export PATH="/usr/local/bin:$PATH"
+  hash -r 2>/dev/null || true
   if command -v ollama >/dev/null 2>&1; then
     return 0
   fi
   [ "$install_ollama" = "1" ] || return 1
-  log "Ollama is not on PATH. Installing from https://ollama.com/install.sh ..."
-  if [ "$(id -u)" -eq 0 ]; then
-    curl -fsSL https://ollama.com/install.sh | sh || return 1
-  elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
-    curl -fsSL https://ollama.com/install.sh | sudo -n sh || return 1
-  else
-    log "Cannot auto-install Ollama (sudo would need a password). Install it yourself with:"
-    log "  curl -fsSL https://ollama.com/install.sh | sh"
+  if ! ensure_zstd; then
+    log "ERROR: zstd is missing and could not be installed. Ollama cannot be installed."
+    log "On Debian/Ubuntu (Chromebook Linux): sudo apt-get update && sudo apt-get install -y zstd"
+    log "Then re-run: curl -L https://the3kingleo-cmyk.github.io/ruth-install|sh"
     return 1
   fi
+  log "Ollama is not on PATH. Installing from https://ollama.com/install.sh ..."
+  if install_ollama_once; then
+    hash -r 2>/dev/null || true
+    export PATH="/usr/local/bin:$PATH"
+    command -v ollama >/dev/null 2>&1 && return 0
+  fi
+  log "ERROR: Ollama install failed. Retrying once after ensuring zstd is installed ..."
+  ensure_zstd || true
+  if install_ollama_once; then
+    hash -r 2>/dev/null || true
+    export PATH="/usr/local/bin:$PATH"
+    command -v ollama >/dev/null 2>&1 && return 0
+  fi
+  log "ERROR: Ollama install failed again. Ruth cannot start a local model until Ollama is installed."
+  log "Fix: sudo apt-get install -y zstd && curl -fsSL https://ollama.com/install.sh | sh"
+  log "Then run: ruth doctor --repair"
+  return 1
+}
+
+start_ollama_service() {
+  export PATH="/usr/local/bin:$PATH"
   hash -r 2>/dev/null || true
-  command -v ollama >/dev/null 2>&1
+  if ollama list >/dev/null 2>&1; then
+    return 0
+  fi
+  log "Starting the ollama service ..."
+  if command -v systemctl >/dev/null 2>&1; then
+    if [ "$(id -u)" -eq 0 ]; then
+      systemctl start ollama >/dev/null 2>&1 || true
+    elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+      sudo -n systemctl start ollama >/dev/null 2>&1 || true
+    fi
+  fi
+  if ollama list >/dev/null 2>&1; then
+    return 0
+  fi
+  log "Starting ollama serve in the background ..."
+  nohup ollama serve >/tmp/ollama-serve.ruth-install.log 2>&1 &
+  for _ in $(seq 1 30); do
+    ollama list >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  log "ERROR: ollama is installed but the service did not become ready. Later run: ruth doctor --repair"
+  return 1
 }
 
 
@@ -347,17 +431,12 @@ create_ruth_models() {
 
 
 if ensure_ollama; then
-  if ! ollama list >/dev/null 2>&1; then
-    log "Starting ollama serve in the background ..."
-    nohup ollama serve >/tmp/ollama-serve.ruth-install.log 2>&1 &
-    for _ in $(seq 1 30); do
-      ollama list >/dev/null 2>&1 && break
-      sleep 1
-    done
-  fi
-  create_ruth_models || log "warning: could not build the Ruth Ollama models. Later run: ruth doctor --repair"
+  start_ollama_service || true
+  create_ruth_models || log "ERROR: could not build the Ruth Ollama models. Later run: ruth doctor --repair"
 else
-  log "Ollama is not available yet. After installing it, run: ruth doctor --repair"
+  log "ERROR: Ollama is not installed. Ruth cannot chat until you install it."
+  log "On Debian/Ubuntu: sudo apt-get install -y zstd && curl -fsSL https://ollama.com/install.sh | sh"
+  log "Then run: ruth doctor --repair"
 fi
 
 # Optional GitHub CLI for `ruth cloud` (Ollama in a Codespace).
@@ -435,3 +514,7 @@ log "  3. opencode              # full TUI; or: opencode run 'hello'"
 log "  4. (optional) gh auth login --web"
 log "  5. (optional) ruth cloud up    # stop with: ruth cloud down"
 log "Done."
+# Do not auto-launch the TUI. If this is a real terminal, tell him how to start.
+if [ -t 1 ]; then
+  log "Open a new terminal and type: ruth"
+fi
