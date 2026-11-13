@@ -1,9 +1,9 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Install Ruth and the Chromebook-lite Oh My OpenCode plugin from the public
 # the3kingleo-cmyk/ruth-install GitHub releases. No GitHub token is required.
 # Writes only under $HOME (except an optional Ollama system install).
 # Do not run this on a machine the user did not ask to modify.
-set -euo pipefail
+set -eu
 
 INSTALL_REPO="${RUTH_INSTALL_REPO:-the3kingleo-cmyk/ruth-install}"
 RELEASE_BASE="${RUTH_RELEASE_BASE:-https://github.com/${INSTALL_REPO}/releases/latest/download}"
@@ -74,7 +74,7 @@ if [ ! -f "$CONFIG_DIR/ruth.json" ] && [ ! -f "$CONFIG_DIR/ruth.jsonc" ]; then
   "\$comment": "Default Ruth config for local Ollama. Prefer ${TOOLS_MODEL} when you need tools.",
   "model": "ollama/${CHAT_MODEL}",
   "small_model": "ollama/${CHAT_MODEL}",
-  "websearch": false,
+  "websearch": { "provider": "random" },
   "plugins": [],
   "provider": {
     "ollama": {
@@ -236,10 +236,36 @@ else
   log "Ollama is not available yet. After installing it, run: ollama pull $CHAT_MODEL"
 fi
 
+# Optional GitHub CLI for `ruth cloud` (Ollama in a Codespace).
+install_gh() {
+  if command -v gh >/dev/null 2>&1; then
+    log "GitHub CLI (gh) is already on PATH"
+    return 0
+  fi
+  case "${INSTALL_GH:-1}" in
+    0|false|no|NO|FALSE)
+      log "Skipping gh install (INSTALL_GH=0). For 'ruth cloud', run: sudo apt-get update && sudo apt-get install -y gh"
+      return 0
+      ;;
+  esac
+  if command -v apt-get >/dev/null 2>&1; then
+    if [ "$(id -u)" -eq 0 ]; then
+      apt-get update && apt-get install -y gh && { log "Installed GitHub CLI (gh)"; return 0; }
+    elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+      sudo -n apt-get update && sudo -n apt-get install -y gh && { log "Installed GitHub CLI (gh)"; return 0; }
+    fi
+  fi
+  log "Could not auto-install the GitHub CLI. For 'ruth cloud', run: sudo apt-get update && sudo apt-get install -y gh"
+  log "  Then: gh auth login   (needs the codespace scope, or a fine-grained token with Codespaces access on the3kingleo-cmyk/ruth-codespace)"
+}
+
+install_gh
+
 log ""
 log "Next steps:"
 log "  1. source ~/.bashrc    (or open a new terminal so PATH includes ~/.local/bin)"
 log "  2. ruth --version"
 log "  3. ruth run 'hello'"
 log "  4. ruth doctor         (repairs config/PATH/model if needed)"
+log "  5. (optional) ruth cloud up    # Ollama in a GitHub Codespace; stop with ruth cloud down"
 log "Done."

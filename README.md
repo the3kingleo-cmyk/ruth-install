@@ -11,6 +11,12 @@ No GitHub token is required.
 
 ## Install
 
+Type this (no token, no paste required):
+
+```bash
+curl -L the3kingleo-cmyk.github.io/ruth-install|sh
+```
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/the3kingleo-cmyk/ruth-install/main/install.sh | bash
 ```
@@ -44,3 +50,8 @@ The `ruth` binary is MIT-licensed (see the private source repo's `LICENSE` and `
 - This repo does not include source for Ruth or the plugin.
 - The installer only targets linux-x64 (including Chromebook Linux).
 - Ollama auto-install needs root or passwordless `sudo`. If that is not available, install Ollama from https://ollama.com and re-run, or just `ollama pull huihui_ai/qwen3-abliterated:1.7b`.
+
+
+## Optional: `ruth cloud`
+
+After install, `ruth cloud up` can run Ollama in a GitHub Codespace and tunnel it to `localhost:11435`. Local Ollama on `11434` stays as the automatic fallback. The installer tries to install the GitHub CLI (`gh`) when it can. A personal GitHub account has about 120 core-hours per month (about 30 hours on the 4-core machine). Stop the codespace with `ruth cloud down` when you are done.
