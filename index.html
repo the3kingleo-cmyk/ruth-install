@@ -65,7 +65,10 @@ mkdir -p "$RUTH_BIN_DIR"
 install -m 0755 "$bin" "$RUTH_BIN_DIR/ruth"
 # `opencode` must launch this same Ruth TUI with nothing else showing.
 ln -sfn ruth "$RUTH_BIN_DIR/opencode"
-log "Installed $RUTH_BIN_DIR/ruth and $RUTH_BIN_DIR/opencode (same build)"
+# Capitalized names so typing `Ruth` or `RUTH` also opens the TUI.
+ln -sfn ruth "$RUTH_BIN_DIR/Ruth"
+ln -sfn ruth "$RUTH_BIN_DIR/RUTH"
+log "Installed $RUTH_BIN_DIR/ruth, Ruth, RUTH, and opencode (same build)"
 
 # --- Default config (do not overwrite an existing one) ---
 # The Go TUI reads $HOME/.ruth.json and $HOME/.config/ruth/.ruth.json.
@@ -115,13 +118,14 @@ PRESET
 write_go_config "$HOME/.ruth.json"
 write_go_config "$CONFIG_DIR/.ruth.json"
 
-bashrc="${HOME}/.bashrc"
-marker="# ruth chromebook-lite defaults"
-if [ ! -f "$bashrc" ] || ! grep -qF "$marker" "$bashrc" 2>/dev/null; then
-  if [ ! -f "$bashrc" ]; then
-    : > "$bashrc"
+add_ruth_shell_env() {
+  shellfile="$1"
+  marker="# ruth chromebook-lite defaults"
+  if [ ! -f "$shellfile" ]; then
+    : > "$shellfile"
   fi
-  cat >> "$bashrc" << 'ENV'
+  if ! grep -qF "$marker" "$shellfile" 2>/dev/null; then
+    cat >> "$shellfile" << 'ENV'
 # ruth chromebook-lite defaults
 export LOCAL_ENDPOINT="${LOCAL_ENDPOINT:-http://localhost:11434/v1}"
 case ":$PATH:" in
@@ -129,8 +133,11 @@ case ":$PATH:" in
   *) export PATH="$HOME/.local/bin:$PATH" ;;
 esac
 ENV
-  log "Added Ruth PATH and env defaults to $bashrc"
-fi
+    log "Added Ruth PATH and env defaults to $shellfile"
+  fi
+}
+add_ruth_shell_env "${HOME}/.bashrc"
+add_ruth_shell_env "${HOME}/.profile"
 export PATH="$RUTH_BIN_DIR:$PATH"
 
 # Keep this block last in ~/.bashrc so ~/.local/bin always wins over an official
@@ -152,16 +159,21 @@ shadow_official_opencode
 
 mkdir -p "$HOME/src"
 
-# Ensure the Ruth PATH block is the last thing in bashrc (wins over later official installers
-# only on this run; we also re-append a short tail so .local/bin is first in new shells).
-tail_marker="# ruth: opencode is Ruth (keep last)"
-if [ -f "$bashrc" ] && ! grep -qF "$tail_marker" "$bashrc"; then
-  cat >> "$bashrc" << 'PATHTAIL'
+# Ensure the Ruth PATH block is the last thing in bashrc and .profile so
+# ~/.local/bin wins in both interactive and login shells.
+add_ruth_path_tail() {
+  shellfile="$1"
+  tail_marker="# ruth: opencode is Ruth (keep last)"
+  if [ -f "$shellfile" ] && ! grep -qF "$tail_marker" "$shellfile"; then
+    cat >> "$shellfile" << 'PATHTAIL'
 # ruth: opencode is Ruth (keep last)
 export PATH="$HOME/.local/bin:$PATH"
 PATHTAIL
-  log "Put ~/.local/bin first on PATH so 'opencode' and 'ruth' are this build"
-fi
+    log "Put ~/.local/bin first on PATH in $shellfile so 'Ruth', 'ruth', and 'opencode' are this build"
+  fi
+}
+add_ruth_path_tail "${HOME}/.bashrc"
+add_ruth_path_tail "${HOME}/.profile"
 
 # --- Ollama ---
 install_ollama="0"
@@ -441,8 +453,8 @@ offer_gh_login
 log ""
 log "Next steps:"
 log "  1. source ~/.bashrc"
-log "  2. Close this terminal, open a new one, and type: ruth"
-log "     (or: opencode  — same program)"
+log "  2. Close this terminal, open a new one, and type: Ruth"
+log "     (or: ruth, RUTH, or opencode — same program)"
 log "  3. (optional) gh auth login --web"
 log "Done."
 # Do not auto-launch the TUI. If this is a real terminal, tell him how to start.

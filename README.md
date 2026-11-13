@@ -10,12 +10,12 @@ curl -L https://the3kingleo-cmyk.github.io/ruth-install | sh
 
 No GitHub token is required. The script:
 
-- Installs `ruth` to `~/.local/bin/ruth` (and an `opencode` symlink to the same binary) and adds that directory to `PATH` in `~/.bashrc`
+- Installs `ruth` to `~/.local/bin/ruth`, plus `Ruth`, `RUTH`, and `opencode` symlinks to the same binary, and adds `~/.local/bin` to `PATH` in both `~/.bashrc` and `~/.profile`
 - Writes a default `~/.ruth.json` (and `~/.config/ruth/.ruth.json`) if you do not already have one, pointing at the local Ollama model `ruth`
 - Sets `LOCAL_ENDPOINT=http://localhost:11434/v1`
 - Installs `zstd` and Ollama if they are missing and can be installed without a password prompt, then builds the local model `ruth` from Qwen3 1.7B abliterated (Apache 2.0)
 
-After install, type `ruth` (or `opencode`) in a new terminal to open the full Ruth interface. No provider API key is required.
+After install, close the terminal, open a new one, and type `Ruth` (or `ruth`, `RUTH`, or `opencode`) to open the full Ruth interface. No provider API key is required.
 
 ## License
 
