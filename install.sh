@@ -79,10 +79,14 @@ cleanup_legacy() {
   fi
   for f in "$CONFIG_DIR/ruth.json" "$CONFIG_DIR/ruth.jsonc"; do
     if [ -f "$f" ] && grep -qE '"model"[[:space:]]*:[[:space:]]*"ollama/|"plugins"' "$f" 2>/dev/null; then
-      mv "$f" "$f.ts-aside"
-      log "Moved old TypeScript config $f aside to $f.ts-aside"
+      rm -f "$f"
+      log "Removed old TypeScript config $f (replaced by the Go .ruth.json config)"
     fi
   done
+  # Drop other leftover TS Ruth share files, but keep the config dir for the Go config.
+  if [ -d "$HOME/.local/share/ruth" ]; then
+    find "$HOME/.local/share/ruth" -mindepth 1 -maxdepth 1 ! -name plugin -exec rm -rf {} + 2>/dev/null || true
+  fi
   if [ -e "$HOME/.opencode" ]; then
     dest="$HOME/.opencode.aside"
     n=1
@@ -114,24 +118,6 @@ write_go_config() {
   "providers": {
     "local": {
       "apiKey": "local"
-    }
-  },
-  "agents": {
-    "coder": {
-      "model": "local.ruth",
-      "maxTokens": 4096
-    },
-    "summarizer": {
-      "model": "local.ruth",
-      "maxTokens": 4096
-    },
-    "task": {
-      "model": "local.ruth",
-      "maxTokens": 4096
-    },
-    "title": {
-      "model": "local.ruth",
-      "maxTokens": 80
     }
   },
   "tui": {
