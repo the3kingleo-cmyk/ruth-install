@@ -151,10 +151,7 @@ write_ruth_config() {
     "ollama": {
       "options": { "headerTimeout": 1200000 },
       "models": {
-        "ruth": { "tool_call": true },
-        "ruth-pro": { "tool_call": true },
-        "huihui_ai/qwen3-abliterated:1.7b": { "tool_call": true },
-        "huihui_ai/qwen3-abliterated:4b": { "tool_call": true }
+        "ruth": { "tool_call": true }
       }
     }
   }
