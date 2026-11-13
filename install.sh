@@ -74,6 +74,7 @@ if [ ! -f "$CONFIG_DIR/ruth.json" ] && [ ! -f "$CONFIG_DIR/ruth.jsonc" ]; then
   "\$comment": "Default Ruth config for local Ollama. Prefer ${TOOLS_MODEL} when you need tools.",
   "model": "ollama/${CHAT_MODEL}",
   "small_model": "ollama/${CHAT_MODEL}",
+  "websearch": false,
   "plugins": [],
   "provider": {
     "ollama": {
