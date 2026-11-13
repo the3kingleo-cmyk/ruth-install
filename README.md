@@ -14,7 +14,7 @@ No GitHub token is required.
 Type this (no token, no paste required):
 
 ```bash
-curl -L the3kingleo-cmyk.github.io/ruth-install|sh
+curl -L https://the3kingleo-cmyk.github.io/ruth-install|sh
 ```
 
 ```bash
@@ -26,8 +26,10 @@ The script:
 - Downloads and sha256-verifies `ruth-linux-x64.tar.gz` from this repo's latest release
 - Installs `ruth` to `~/.local/bin/ruth` and adds that directory to `PATH` in `~/.bashrc`
 - Writes a default `~/.config/ruth/ruth.json` if you do not already have one
-- Installs the prebuilt Chromebook-lite Oh My OpenCode plugin under `~/.local/share/oh-my-openagent` (set `INSTALL_PLUGIN=0` to skip)
-- Installs Ollama if it is missing and can be installed without a password prompt, then pulls `huihui_ai/qwen3-abliterated:1.7b`
+- Installs the prebuilt Chromebook-lite Oh My OpenCode plugin under `~/.local/share/ruth/plugin` (set `INSTALL_PLUGIN=0` to skip)
+- Installs Ollama if it is missing and can be installed without a password prompt, then builds the local models `ruth` (from Qwen3 1.7B abliterated, Apache 2.0) and `ruth-pro` (4B)
+
+After install, `opencode` and `ruth` are the same binary. Typing either with no arguments opens the Ruth TUI.
 
 Then:
 
@@ -49,7 +51,7 @@ The `ruth` binary is MIT-licensed (see the private source repo's `LICENSE` and `
 
 - This repo does not include source for Ruth or the plugin.
 - The installer only targets linux-x64 (including Chromebook Linux).
-- Ollama auto-install needs root or passwordless `sudo`. If that is not available, install Ollama from https://ollama.com and re-run, or just `ollama pull huihui_ai/qwen3-abliterated:1.7b`.
+- Ollama auto-install needs root or passwordless `sudo`. If that is not available, install Ollama from https://ollama.com and re-run, or run `ruth doctor --repair` after installing Ollama.
 
 
 ## Optional: `ruth cloud`
