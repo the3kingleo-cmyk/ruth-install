@@ -1,6 +1,7 @@
 #!/bin/sh
-# Install Ruth and the Chromebook-lite Oh My OpenCode plugin from the public
-# the3kingleo-cmyk/ruth-install GitHub releases. No GitHub token is required.
+# Install Ruth (the Go Bubble Tea TUI, forked from MIT-licensed
+# opencode-ai/opencode) from the public the3kingleo-cmyk/ruth-install GitHub
+# releases. No GitHub token is required.
 # Writes only under $HOME (except an optional Ollama system install).
 # Do not run this on a machine the user did not ask to modify.
 set -eu
@@ -8,11 +9,8 @@ set -eu
 INSTALL_REPO="${RUTH_INSTALL_REPO:-the3kingleo-cmyk/ruth-install}"
 RELEASE_BASE="${RUTH_RELEASE_BASE:-https://github.com/${INSTALL_REPO}/releases/latest/download}"
 RUTH_ASSET="${RUTH_ASSET:-ruth-linux-x64.tar.gz}"
-PLUGIN_ASSET="${PLUGIN_ASSET:-oh-my-openagent-chromebook-lite.tar.gz}"
 RUTH_BIN_DIR="${RUTH_BIN_DIR:-$HOME/.local/bin}"
-OMO_INSTALL_DIR="${OMO_INSTALL_DIR:-$HOME/.local/share/ruth/plugin}"
 CONFIG_DIR="${RUTH_CONFIG_DIR:-$HOME/.config/ruth}"
-INSTALL_PLUGIN="${INSTALL_PLUGIN:-1}"
 INSTALL_OLLAMA="${INSTALL_OLLAMA:-1}"
 CHAT_MODEL="${RUTH_CHAT_MODEL:-ruth}"
 TOOLS_MODEL="${RUTH_TOOLS_MODEL:-ruth-pro}"
@@ -70,118 +68,53 @@ ln -sfn ruth "$RUTH_BIN_DIR/opencode"
 log "Installed $RUTH_BIN_DIR/ruth and $RUTH_BIN_DIR/opencode (same build)"
 
 # --- Default config (do not overwrite an existing one) ---
-mkdir -p "$CONFIG_DIR"
-if [ ! -f "$CONFIG_DIR/ruth.json" ] && [ ! -f "$CONFIG_DIR/ruth.jsonc" ]; then
-  cat > "$CONFIG_DIR/ruth.json" << PRESET
+# The Go TUI reads $HOME/.ruth.json and $HOME/.config/ruth/.ruth.json.
+mkdir -p "$CONFIG_DIR" "$HOME"
+write_go_config() {
+  dest="$1"
+  if [ -f "$dest" ]; then
+    log "Keeping existing Ruth config at $dest"
+    return 0
+  fi
+  cat > "$dest" << 'PRESET'
 {
-  "\$comment": "Default Ruth config. Local model is named Ruth (Ollama \`ruth\` on Qwen3 1.7B, Apache 2.0). Use \`ruth-pro\` (4B) for heavier tool work.",
-  "model": "ollama/ruth",
-  "small_model": "ollama/ruth",
-  "websearch": { "provider": "random" },
-  "permissions": [
-    { "action": "execute", "resource": "*", "effect": "deny" }
-  ],
-  "plugins": [],
-  "provider": {
-    "ollama": {
-      "options": {
-        "headerTimeout": 1200000,
-        "chunkTimeout": false
-      },
-      "models": {
-        "ruth": {
-          "capabilities": { "tools": true }
-        },
-        "ruth-pro": {
-          "capabilities": { "tools": true }
-        },
-        "${BASE_TOOLS}": {
-          "capabilities": { "tools": true }
-        },
-        "${BASE_CHAT}": {
-          "capabilities": { "tools": true }
-        }
-      }
+  "data": {
+    "directory": ".ruth"
+  },
+  "providers": {
+    "local": {
+      "apiKey": "local"
     }
-  }
+  },
+  "agents": {
+    "coder": {
+      "model": "local.ruth",
+      "maxTokens": 4096
+    },
+    "summarizer": {
+      "model": "local.ruth",
+      "maxTokens": 4096
+    },
+    "task": {
+      "model": "local.ruth",
+      "maxTokens": 4096
+    },
+    "title": {
+      "model": "local.ruth",
+      "maxTokens": 80
+    }
+  },
+  "tui": {
+    "theme": "ruth"
+  },
+  "autoCompact": true
 }
 PRESET
-  log "Wrote default $CONFIG_DIR/ruth.json (model: ollama/ruth; tools: ollama/ruth-pro)"
-else
-  log "Keeping existing Ruth config in $CONFIG_DIR"
-fi
+  log "Wrote default $dest (local Ollama model: ruth)"
+}
+write_go_config "$HOME/.ruth.json"
+write_go_config "$CONFIG_DIR/.ruth.json"
 
-# --- Plugin bundle ---
-install_plugin="0"
-case "${INSTALL_PLUGIN}" in
-  1|true|yes|YES|TRUE) install_plugin="1" ;;
-esac
-
-if [ "$install_plugin" = "1" ]; then
-  download "${RELEASE_BASE}/${PLUGIN_ASSET}" "$tmpdir/$PLUGIN_ASSET"
-  download "${RELEASE_BASE}/${PLUGIN_ASSET}.sha256" "$tmpdir/${PLUGIN_ASSET}.sha256"
-  verify_sha256 "$tmpdir/$PLUGIN_ASSET" "$tmpdir/${PLUGIN_ASSET}.sha256"
-  mkdir -p "$tmpdir/plugin-unpack" "$(dirname "$OMO_INSTALL_DIR")"
-  tar -xzf "$tmpdir/$PLUGIN_ASSET" -C "$tmpdir/plugin-unpack"
-  # Accept either a top-level folder or files at the archive root.
-  src="$tmpdir/plugin-unpack"
-  if [ ! -f "$src/dist/index.js" ]; then
-    idx="$(find "$tmpdir/plugin-unpack" -type f -name index.js | grep '/dist/index.js$' | head -n 1 || true)"
-    if [ -n "${idx:-}" ]; then
-      src="$(CDPATH= cd -- "$(dirname -- "$idx")/.." && pwd)"
-    fi
-  fi
-  [ -n "${src:-}" ] && [ -f "$src/dist/index.js" ] || die "Plugin archive did not contain dist/index.js"
-  rm -rf "$OMO_INSTALL_DIR"
-  mkdir -p "$OMO_INSTALL_DIR"
-  # copy including hidden files, but not the directory itself as a nested root
-  cp -a "$src"/. "$OMO_INSTALL_DIR/"
-  log "Installed plugin at $OMO_INSTALL_DIR"
-
-  if command -v jq >/dev/null 2>&1; then
-    cfg="$CONFIG_DIR/ruth.json"
-    [ -f "$cfg" ] || cfg="$CONFIG_DIR/ruth.jsonc"
-    if [ -f "$cfg" ]; then
-      tmp="$(mktemp)"
-      jq --arg p "$OMO_INSTALL_DIR" '
-        .plugins = ((.plugins // [])
-          | map(if type=="string" then . else .package end)
-          | map(select(. != $p and . != ($p+"/") ))
-          + [$p])
-      ' "$cfg" > "$tmp" && mv "$tmp" "$cfg"
-      log "Registered plugin $OMO_INSTALL_DIR in $cfg"
-    fi
-  else
-    # jq is optional: write or refresh plugins with a small python/python3 helper if present.
-    cfg="$CONFIG_DIR/ruth.json"
-    if command -v python3 >/dev/null 2>&1 && [ -f "$cfg" ]; then
-      python3 - "$cfg" "$OMO_INSTALL_DIR" << 'PY'
-import json, sys
-path, plugin = sys.argv[1], sys.argv[2]
-with open(path, encoding="utf-8") as f:
-    data = json.load(f)
-plugins = data.get("plugins") or []
-norm = []
-for entry in plugins:
-    value = entry if isinstance(entry, str) else (entry or {}).get("package")
-    if value and value.rstrip("/") != plugin.rstrip("/"):
-        norm.append(entry)
-norm.append(plugin)
-data["plugins"] = norm
-with open(path, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2)
-    f.write("\n")
-PY
-      log "Registered plugin $OMO_INSTALL_DIR in $cfg"
-    else
-      log "warning: jq/python3 not found; add \"$OMO_INSTALL_DIR\" to plugins in $CONFIG_DIR/ruth.json"
-    fi
-  fi
-else
-  log "Skipping plugin install (INSTALL_PLUGIN=0)"
-fi
-
-# --- PATH and env defaults ---
 bashrc="${HOME}/.bashrc"
 marker="# ruth chromebook-lite defaults"
 if [ ! -f "$bashrc" ] || ! grep -qF "$marker" "$bashrc" 2>/dev/null; then
@@ -190,8 +123,7 @@ if [ ! -f "$bashrc" ] || ! grep -qF "$marker" "$bashrc" 2>/dev/null; then
   fi
   cat >> "$bashrc" << 'ENV'
 # ruth chromebook-lite defaults
-export RUTH_SSE_IDLE_TIMEOUT="${RUTH_SSE_IDLE_TIMEOUT:-600000}"
-export RUTH_OLLAMA_ASSUME_TOOLS="${RUTH_OLLAMA_ASSUME_TOOLS:-1}"
+export LOCAL_ENDPOINT="${LOCAL_ENDPOINT:-http://localhost:11434/v1}"
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
   *) export PATH="$HOME/.local/bin:$PATH" ;;
@@ -309,7 +241,7 @@ ensure_ollama() {
   fi
   log "ERROR: Ollama install failed again. Ruth cannot start a local model until Ollama is installed."
   log "Fix: sudo apt-get install -y zstd && curl -fsSL https://ollama.com/install.sh | sh"
-  log "Then run: ruth doctor --repair"
+  log "Then re-run this installer."
   return 1
 }
 
@@ -336,7 +268,7 @@ start_ollama_service() {
     ollama list >/dev/null 2>&1 && return 0
     sleep 1
   done
-  log "ERROR: ollama is installed but the service did not become ready. Later run: ruth doctor --repair"
+  log "ERROR: ollama is installed but the service did not become ready. Then re-run this installer."
   return 1
 }
 
@@ -410,7 +342,7 @@ create_ruth_models() {
       if ollama_has "$BASE_TOOLS" || ollama pull "$BASE_TOOLS"; then
         ruth_from=$BASE_TOOLS
       else
-        log "warning: could not pull a Qwen3 base model. Later run: ruth doctor --repair"
+        log "warning: could not pull a Qwen3 base model. Then re-run this installer."
         return 1
       fi
     fi
@@ -432,11 +364,11 @@ create_ruth_models() {
 
 if ensure_ollama; then
   start_ollama_service || true
-  create_ruth_models || log "ERROR: could not build the Ruth Ollama models. Later run: ruth doctor --repair"
+  create_ruth_models || log "ERROR: could not build the Ruth Ollama models. Then re-run this installer."
 else
   log "ERROR: Ollama is not installed. Ruth cannot chat until you install it."
   log "On Debian/Ubuntu: sudo apt-get install -y zstd && curl -fsSL https://ollama.com/install.sh | sh"
-  log "Then run: ruth doctor --repair"
+  log "Then re-run this installer."
 fi
 
 # Optional GitHub CLI for `ruth cloud` (Ollama in a Codespace).
@@ -509,10 +441,9 @@ offer_gh_login
 log ""
 log "Next steps:"
 log "  1. source ~/.bashrc"
-log "  2. opencode --version    # or: ruth --version"
-log "  3. opencode              # full TUI; or: opencode run 'hello'"
-log "  4. (optional) gh auth login --web"
-log "  5. (optional) ruth cloud up    # stop with: ruth cloud down"
+log "  2. Close this terminal, open a new one, and type: ruth"
+log "     (or: opencode  — same program)"
+log "  3. (optional) gh auth login --web"
 log "Done."
 # Do not auto-launch the TUI. If this is a real terminal, tell him how to start.
 if [ -t 1 ]; then

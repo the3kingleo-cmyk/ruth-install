@@ -1,59 +1,27 @@
 # Ruth installer
 
-Public, token-free installer and release assets for **Ruth**, a personal Chromebook-oriented coding agent.
+Public, token-free installer and release assets for **Ruth**, a personal MIT-licensed fork of the archived [OpenCode](https://github.com/opencode-ai/opencode) Go / Bubble Tea TUI. The original copyright is retained; a 2026 copyright line for David Anderson is added.
 
-Source code lives in private repositories. This repo only ships:
-
-- `install.sh` — the one-line installer
-- GitHub release assets: the `ruth` linux-x64 binary (plus sha256) and a prebuilt Oh My OpenCode chromebook-lite plugin bundle (plus sha256)
-
-No GitHub token is required.
-
-## Install
-
-Type this (no token, no paste required):
+Install on Chromebook Linux (or other linux-x64) with:
 
 ```bash
-curl -L https://the3kingleo-cmyk.github.io/ruth-install|sh
+curl -L https://the3kingleo-cmyk.github.io/ruth-install | sh
 ```
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/the3kingleo-cmyk/ruth-install/main/install.sh | bash
-```
+No GitHub token is required. The script:
 
-The script:
+- Installs `ruth` to `~/.local/bin/ruth` (and an `opencode` symlink to the same binary) and adds that directory to `PATH` in `~/.bashrc`
+- Writes a default `~/.ruth.json` (and `~/.config/ruth/.ruth.json`) if you do not already have one, pointing at the local Ollama model `ruth`
+- Sets `LOCAL_ENDPOINT=http://localhost:11434/v1`
+- Installs `zstd` and Ollama if they are missing and can be installed without a password prompt, then builds the local model `ruth` from Qwen3 1.7B abliterated (Apache 2.0)
 
-- Downloads and sha256-verifies `ruth-linux-x64.tar.gz` from this repo's latest release
-- Installs `ruth` to `~/.local/bin/ruth` and adds that directory to `PATH` in `~/.bashrc`
-- Writes a default `~/.config/ruth/ruth.json` if you do not already have one
-- Installs the prebuilt Chromebook-lite Oh My OpenCode plugin under `~/.local/share/ruth/plugin` (set `INSTALL_PLUGIN=0` to skip)
-- Installs Ollama if it is missing and can be installed without a password prompt, then builds the local models `ruth` (from Qwen3 1.7B abliterated, Apache 2.0) and `ruth-pro` (4B)
+After install, type `ruth` (or `opencode`) in a new terminal to open the full Ruth interface. No provider API key is required.
 
-After install, `opencode` and `ruth` are the same binary. Typing either with no arguments opens the Ruth TUI.
+## License
 
-Then:
-
-```bash
-source ~/.bashrc
-ruth run 'hello'
-ruth doctor
-```
-
-`ruth upgrade` and `ruth self-update` also use these public releases. A GitHub token is optional.
-
-## Plugin license
-
-The Oh My OpenCode plugin is a modified copy of [code-yeongyu/oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent), redistributed free of charge for personal, non-commercial use under the **Sustainable Use License 1.0**. The bundle includes `LICENSE.md` and `NOTICE.md`. It is not affiliated with the original authors.
-
-The `ruth` binary is MIT-licensed (see the private source repo's `LICENSE` and `NOTICE`).
+The `ruth` binary is MIT-licensed. See the source repository [the3kingleo-cmyk/ruth-go](https://github.com/the3kingleo-cmyk/ruth-go) `LICENSE`.
 
 ## Limits
 
-- This repo does not include source for Ruth or the plugin.
 - The installer only targets linux-x64 (including Chromebook Linux).
-- Ollama auto-install needs root or passwordless `sudo`. If that is not available, install Ollama from https://ollama.com and re-run, or run `ruth doctor --repair` after installing Ollama.
-
-
-## Optional: `ruth cloud`
-
-After install, `ruth cloud up` can run Ollama in a GitHub Codespace and tunnel it to `localhost:11435`. Local Ollama on `11434` stays as the automatic fallback. The installer tries to install the GitHub CLI (`gh`) when it can. A personal GitHub account has about 120 core-hours per month (about 30 hours on the 4-core machine). Stop the codespace with `ruth cloud down` when you are done.
+- Ollama auto-install needs root or passwordless `sudo`. If that is not available, install `zstd` and Ollama yourself, then re-run this installer.
