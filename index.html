@@ -122,12 +122,12 @@ write_ruth_config() {
   "plugins": [],
   "provider": {
     "ollama": {
-      "options": { "headerTimeout": 1200000, "chunkTimeout": false },
+      "options": { "headerTimeout": 1200000 },
       "models": {
-        "ruth": { "capabilities": { "tools": true } },
-        "ruth-pro": { "capabilities": { "tools": true } },
-        "huihui_ai/qwen3-abliterated:1.7b": { "capabilities": { "tools": true } },
-        "huihui_ai/qwen3-abliterated:4b": { "capabilities": { "tools": true } }
+        "ruth": { "tool_call": true },
+        "ruth-pro": { "tool_call": true },
+        "huihui_ai/qwen3-abliterated:1.7b": { "tool_call": true },
+        "huihui_ai/qwen3-abliterated:4b": { "tool_call": true }
       }
     }
   }
