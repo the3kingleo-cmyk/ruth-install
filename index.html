@@ -1,7 +1,6 @@
 #!/bin/sh
-# Install Ruth (the Go Bubble Tea TUI, forked from MIT-licensed
-# opencode-ai/opencode) from the public the3kingleo-cmyk/ruth-install GitHub
-# releases. No GitHub token is required.
+# Install Ruth (the current TypeScript TUI) from the public
+# the3kingleo-cmyk/ruth-install GitHub releases. No GitHub token is required.
 # Writes only under $HOME (except an optional Ollama system install).
 # Do not run this on a machine the user did not ask to modify.
 set -eu
@@ -70,23 +69,26 @@ ln -sfn ruth "$RUTH_BIN_DIR/Ruth"
 ln -sfn ruth "$RUTH_BIN_DIR/RUTH"
 log "Installed $RUTH_BIN_DIR/ruth, Ruth, RUTH, and opencode (same build)"
 
-# Remove leftover TypeScript Ruth files and move ~/.opencode aside so this
-# Go TUI is the only thing that runs.
+# Remove leftover plugins, move ~/.opencode aside, and retire Go-only
+# configs so this Ruth TUI is the only thing that runs.
 cleanup_legacy() {
   if [ -e "$HOME/.local/share/ruth/plugin" ]; then
     rm -rf "$HOME/.local/share/ruth/plugin"
-    log "Removed old TypeScript plugin at $HOME/.local/share/ruth/plugin"
+    log "Removed leftover plugin at $HOME/.local/share/ruth/plugin"
   fi
-  for f in "$CONFIG_DIR/ruth.json" "$CONFIG_DIR/ruth.jsonc"; do
-    if [ -f "$f" ] && grep -qE '"model"[[:space:]]*:[[:space:]]*"ollama/|"plugins"' "$f" 2>/dev/null; then
-      rm -f "$f"
-      log "Removed old TypeScript config $f (replaced by the Go .ruth.json config)"
+  mkdir -p "$CONFIG_DIR"
+  for f in "$HOME/.ruth.json" "$CONFIG_DIR/.ruth.json"; do
+    if [ -f "$f" ]; then
+      dest="$f.aside"
+      n=1
+      while [ -e "$dest" ]; do
+        dest="$f.aside.$n"
+        n=$((n + 1))
+      done
+      mv "$f" "$dest"
+      log "Moved Go-style config $f aside to $dest"
     fi
   done
-  # Drop other leftover TS Ruth share files, but keep the config dir for the Go config.
-  if [ -d "$HOME/.local/share/ruth" ]; then
-    find "$HOME/.local/share/ruth" -mindepth 1 -maxdepth 1 ! -name plugin -exec rm -rf {} + 2>/dev/null || true
-  fi
   if [ -e "$HOME/.opencode" ]; then
     dest="$HOME/.opencode.aside"
     n=1
@@ -101,10 +103,10 @@ cleanup_legacy() {
 cleanup_legacy
 
 
-# --- Default config (do not overwrite an existing one) ---
-# The Go TUI reads $HOME/.ruth.json and $HOME/.config/ruth/.ruth.json.
+# --- Default config (do not overwrite an existing TypeScript Ruth config) ---
+# The TUI reads $HOME/.config/ruth/ruth.json.
 mkdir -p "$CONFIG_DIR" "$HOME"
-write_go_config() {
+write_ruth_config() {
   dest="$1"
   if [ -f "$dest" ]; then
     log "Keeping existing Ruth config at $dest"
@@ -112,24 +114,28 @@ write_go_config() {
   fi
   cat > "$dest" << 'PRESET'
 {
-  "data": {
-    "directory": ".ruth"
-  },
-  "providers": {
-    "local": {
-      "apiKey": "local"
+  "$comment": "Default Ruth config. The local model is named Ruth (Ollama ruth on Qwen3 1.7B).",
+  "model": "ollama/ruth",
+  "small_model": "ollama/ruth",
+  "websearch": { "provider": "random" },
+  "permissions": [{ "action": "*", "resource": "*", "effect": "allow" }],
+  "plugins": [],
+  "provider": {
+    "ollama": {
+      "options": { "headerTimeout": 1200000, "chunkTimeout": false },
+      "models": {
+        "ruth": { "capabilities": { "tools": true } },
+        "ruth-pro": { "capabilities": { "tools": true } },
+        "huihui_ai/qwen3-abliterated:1.7b": { "capabilities": { "tools": true } },
+        "huihui_ai/qwen3-abliterated:4b": { "capabilities": { "tools": true } }
+      }
     }
-  },
-  "tui": {
-    "theme": "ruth"
-  },
-  "autoCompact": true
+  }
 }
 PRESET
   log "Wrote default $dest (local Ollama model: ruth)"
 }
-write_go_config "$HOME/.ruth.json"
-write_go_config "$CONFIG_DIR/.ruth.json"
+write_ruth_config "$CONFIG_DIR/ruth.json"
 
 add_ruth_shell_env() {
   shellfile="$1"
