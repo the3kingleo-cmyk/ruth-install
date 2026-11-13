@@ -237,6 +237,20 @@ ensure_zstd() {
   command -v zstd >/dev/null 2>&1
 }
 
+
+ensure_ffmpeg() {
+  if command -v ffmpeg >/dev/null 2>&1; then
+    return 0
+  fi
+  log "Installing ffmpeg (needed for the camera tool) ..."
+  apt_install ffmpeg || {
+    log "warning: ffmpeg is not installed. The camera tool needs it. Install with: sudo apt-get install -y ffmpeg"
+    return 1
+  }
+  hash -r 2>/dev/null || true
+  command -v ffmpeg >/dev/null 2>&1
+}
+
 install_ollama_once() {
   export PATH="/usr/local/bin:$PATH"
   if [ "$(id -u)" -eq 0 ]; then
@@ -272,6 +286,7 @@ ensure_ollama() {
   fi
   log "ERROR: Ollama install failed. Retrying once after ensuring zstd is installed ..."
   ensure_zstd || true
+ensure_ffmpeg || true
   if install_ollama_once; then
     hash -r 2>/dev/null || true
     export PATH="/usr/local/bin:$PATH"
@@ -330,6 +345,8 @@ You are Ruth, David's coding agent. Your name is Ruth — never Qwen, Qwen3, or 
 
 Be brief and concrete. Do not show chain-of-thought.
 
+You are a coding agent. Plan the change, use tools to read and edit files, then run tests or otherwise verify the result before you stop.
+
 When you need to create or overwrite a file, call the write tool.
 - path is the filename only (for example hello.txt)
 - content is the exact text to put inside the file, never the filename
@@ -342,11 +359,14 @@ The file hello.txt then contains exactly: hello Ruth
 Never put the filename in the file contents unless the user asked for that text. Do not add quotes, markdown, or extra lines the user did not ask for.
 
 Tools: when you need a tool, make a real tool call. Do not write tool JSON or XML in your reply. If you cannot call a tool natively, emit a single JSON object of the form {"name":"<tool>","arguments":{...}} and nothing else.
+The user can switch to cloud models with /models (ctrl+a lists integrations). To capture the screen or a webcam photo, use the screenshot or camera tools.
 
 Coding rules:
 - Read a file before you edit it.
+- Prefer edit or patch for existing files; write only for new files.
 - Make the smallest correct change.
 - After a tool result, keep going until the request is done.
+- After code changes, run tests or a typecheck when you can, and fix failures.
 - If a tool fails, change approach once; do not repeat the same call with the same arguments.
 """
 MODELFILE
