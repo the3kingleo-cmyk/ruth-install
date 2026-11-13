@@ -70,6 +70,33 @@ ln -sfn ruth "$RUTH_BIN_DIR/Ruth"
 ln -sfn ruth "$RUTH_BIN_DIR/RUTH"
 log "Installed $RUTH_BIN_DIR/ruth, Ruth, RUTH, and opencode (same build)"
 
+# Remove leftover TypeScript Ruth files and move ~/.opencode aside so this
+# Go TUI is the only thing that runs.
+cleanup_legacy() {
+  if [ -e "$HOME/.local/share/ruth/plugin" ]; then
+    rm -rf "$HOME/.local/share/ruth/plugin"
+    log "Removed old TypeScript plugin at $HOME/.local/share/ruth/plugin"
+  fi
+  for f in "$CONFIG_DIR/ruth.json" "$CONFIG_DIR/ruth.jsonc"; do
+    if [ -f "$f" ] && grep -qE '"model"[[:space:]]*:[[:space:]]*"ollama/|"plugins"' "$f" 2>/dev/null; then
+      mv "$f" "$f.ts-aside"
+      log "Moved old TypeScript config $f aside to $f.ts-aside"
+    fi
+  done
+  if [ -e "$HOME/.opencode" ]; then
+    dest="$HOME/.opencode.aside"
+    n=1
+    while [ -e "$dest" ]; do
+      dest="$HOME/.opencode.aside.$n"
+      n=$((n + 1))
+    done
+    mv "$HOME/.opencode" "$dest"
+    log "Moved $HOME/.opencode aside to $dest"
+  fi
+}
+cleanup_legacy
+
+
 # --- Default config (do not overwrite an existing one) ---
 # The Go TUI reads $HOME/.ruth.json and $HOME/.config/ruth/.ruth.json.
 mkdir -p "$CONFIG_DIR" "$HOME"
@@ -139,23 +166,6 @@ ENV
 add_ruth_shell_env "${HOME}/.bashrc"
 add_ruth_shell_env "${HOME}/.profile"
 export PATH="$RUTH_BIN_DIR:$PATH"
-
-# Keep this block last in ~/.bashrc so ~/.local/bin always wins over an official
-# OpenCode install in ~/.opencode/bin.
-shadow_official_opencode() {
-  official="$HOME/.opencode/bin/opencode"
-  if [ -e "$official" ] || [ -L "$official" ]; then
-    dest="$HOME/.opencode/bin/opencode.official"
-    n=1
-    while [ -e "$dest" ]; do
-      dest="$HOME/.opencode/bin/opencode.official.$n"
-      n=$((n + 1))
-    done
-    mv "$official" "$dest"
-    log "Moved official OpenCode aside to $dest so 'opencode' launches Ruth"
-  fi
-}
-shadow_official_opencode
 
 mkdir -p "$HOME/src"
 
@@ -276,7 +286,7 @@ start_ollama_service() {
   fi
   log "Starting ollama serve in the background ..."
   nohup ollama serve >/tmp/ollama-serve.ruth-install.log 2>&1 &
-  for _ in $(seq 1 30); do
+  for _ in $(seq 1 45); do
     ollama list >/dev/null 2>&1 && return 0
     sleep 1
   done
@@ -362,21 +372,27 @@ create_ruth_models() {
   # Always (re)create `ruth` from this installer's Modelfile so identity
   # and the write-tool example stay current. Never `ollama pull ruth`.
   create_named_model ruth "$ruth_from" || true
-  if ollama_has "$BASE_TOOLS" || ollama pull "$BASE_TOOLS"; then
+  # Do not auto-pull the 4B model; it is large and not required to chat as Ruth.
+  if ollama_has "$BASE_TOOLS"; then
     if ollama_has ruth-pro; then
       log "Ollama already has ruth-pro"
     else
       create_named_model ruth-pro "$BASE_TOOLS" || log "warning: ruth-pro (4b) was not created"
     fi
   else
-    log "warning: skipped ruth-pro because $BASE_TOOLS could not be pulled"
+    log "Skipping ruth-pro (4b) download; the default ruth model is ready."
   fi
 }
 
 
 if ensure_ollama; then
-  start_ollama_service || true
-  create_ruth_models || log "ERROR: could not build the Ruth Ollama models. Then re-run this installer."
+  if start_ollama_service; then
+    log "Ollama is ready at http://localhost:11434"
+    create_ruth_models || log "ERROR: could not build the Ruth Ollama models. Then re-run this installer."
+  else
+    log "ERROR: Ollama did not become ready. Ruth will start it when you type Ruth, or run: ollama serve"
+    log "Then re-run this installer so the ruth model can be created."
+  fi
 else
   log "ERROR: Ollama is not installed. Ruth cannot chat until you install it."
   log "On Debian/Ubuntu: sudo apt-get install -y zstd && curl -fsSL https://ollama.com/install.sh | sh"
