@@ -1,12 +1,15 @@
 #!/bin/sh
-# Install Ruth (the current TypeScript TUI) from the public
-# the3kingleo-cmyk/ruth-install GitHub releases. No GitHub token is required.
+# Install Ruth from this repository's GitHub releases. No GitHub token is required.
 # Writes only under $HOME (except an optional Ollama system install).
 # Do not run this on a machine the user did not ask to modify.
 set -eu
 
-INSTALL_REPO="${RUTH_INSTALL_REPO:-the3kingleo-cmyk/ruth-install}"
-RELEASE_BASE="${RUTH_RELEASE_BASE:-https://github.com/${INSTALL_REPO}/releases/latest/download}"
+# Default release source is this repository. Overrides must stay under the same GitHub owner.
+INSTALL_REPO="the3kingleo-cmyk/ruth-install"
+case "${RUTH_INSTALL_REPO:-}" in
+  the3kingleo-cmyk/*) INSTALL_REPO="$RUTH_INSTALL_REPO" ;;
+esac
+RELEASE_BASE="https://github.com/${INSTALL_REPO}/releases/latest/download"
 RUTH_ASSET="${RUTH_ASSET:-ruth-linux-x64.tar.gz}"
 RUTH_BIN_DIR="${RUTH_BIN_DIR:-$HOME/.local/bin}"
 CONFIG_DIR="${RUTH_CONFIG_DIR:-$HOME/.config/ruth}"
@@ -61,7 +64,7 @@ tar -xzf "$tmpdir/$RUTH_ASSET" -C "$tmpdir/ruth-unpack"
 bin="$(find "$tmpdir/ruth-unpack" -type f \( -name ruth -o -name jcode -o -name opencode \) | head -n 1)"
 [ -n "$bin" ] || die "Downloaded $RUTH_ASSET did not contain a ruth binary"
 
-# Stop a leftover Ruth/OpenCode background service so it cannot keep the
+# Stop a leftover Ruth background service so it cannot keep the
 # managed port or the old binary after this install.
 stop_managed_services() {
   for cmd in "$RUTH_BIN_DIR/ruth" "$RUTH_BIN_DIR/opencode" ruth opencode jcode; do
@@ -81,7 +84,7 @@ stop_managed_services() {
       for pid in $pids; do
         kill -9 "$pid" >/dev/null 2>&1 || true
       done
-      log "Stopped leftover Ruth/OpenCode background service(s)"
+      log "Stopped leftover Ruth background service(s)"
     fi
   fi
 }
@@ -89,15 +92,13 @@ stop_managed_services
 
 mkdir -p "$RUTH_BIN_DIR"
 install -m 0755 "$bin" "$RUTH_BIN_DIR/ruth"
-# `opencode` must launch this same Ruth TUI with nothing else showing.
-ln -sfn ruth "$RUTH_BIN_DIR/opencode"
 # Capitalized names so typing `Ruth` or `RUTH` also opens the TUI.
 ln -sfn ruth "$RUTH_BIN_DIR/Ruth"
 ln -sfn ruth "$RUTH_BIN_DIR/RUTH"
-log "Installed $RUTH_BIN_DIR/ruth, Ruth, RUTH, and opencode (same build)"
+log "Installed $RUTH_BIN_DIR/ruth, Ruth, and RUTH"
 
-# Remove leftover plugins, move ~/.opencode aside, and retire Go-only
-# configs so this Ruth TUI is the only thing that runs.
+# Remove leftover plugins and retire old-style configs so this Ruth TUI
+# is the one that runs.
 cleanup_legacy() {
   if [ -e "$HOME/.local/share/ruth/plugin" ]; then
     rm -rf "$HOME/.local/share/ruth/plugin"
@@ -113,19 +114,9 @@ cleanup_legacy() {
         n=$((n + 1))
       done
       mv "$f" "$dest"
-      log "Moved Go-style config $f aside to $dest"
+      log "Moved old-style config $f aside to $dest"
     fi
   done
-  if [ -e "$HOME/.opencode" ]; then
-    dest="$HOME/.opencode.aside"
-    n=1
-    while [ -e "$dest" ]; do
-      dest="$HOME/.opencode.aside.$n"
-      n=$((n + 1))
-    done
-    mv "$HOME/.opencode" "$dest"
-    log "Moved $HOME/.opencode aside to $dest"
-  fi
 }
 cleanup_legacy
 
@@ -189,13 +180,14 @@ mkdir -p "$HOME/src"
 # ~/.local/bin wins in both interactive and login shells.
 add_ruth_path_tail() {
   shellfile="$1"
-  tail_marker="# ruth: opencode is Ruth (keep last)"
-  if [ -f "$shellfile" ] && ! grep -qF "$tail_marker" "$shellfile"; then
+  tail_marker="# ruth: keep ~/.local/bin first (keep last)"
+  old_marker="# ruth: opencode is Ruth (keep last)"
+  if [ -f "$shellfile" ] && ! grep -qF "$tail_marker" "$shellfile" && ! grep -qF "$old_marker" "$shellfile"; then
     cat >> "$shellfile" << 'PATHTAIL'
-# ruth: opencode is Ruth (keep last)
+# ruth: keep ~/.local/bin first (keep last)
 export PATH="$HOME/.local/bin:$PATH"
 PATHTAIL
-    log "Put ~/.local/bin first on PATH in $shellfile so 'Ruth', 'ruth', and 'opencode' are this build"
+    log "Put ~/.local/bin first on PATH in $shellfile so 'Ruth', 'ruth', and 'RUTH' are this build"
   fi
 }
 add_ruth_path_tail "${HOME}/.bashrc"
@@ -341,11 +333,9 @@ write_ruth_modelfile() {
 FROM $from
 PARAMETER temperature 0.2
 SYSTEM """
-You are Ruth, David's coding agent. Your name is Ruth — never Qwen, Qwen3, or any other model name. If asked your name or who you are, answer only that you are Ruth.
+You are Ruth, a coding agent. Your name is Ruth — never Qwen, Qwen3, or any other model name. If asked your name or who you are, answer only that you are Ruth.
 
 Be brief and concrete. Do not show chain-of-thought.
-
-You are a coding agent. Plan the change, use tools to read and edit files, then run tests or otherwise verify the result before you stop.
 
 When you need to create or overwrite a file, call the write tool.
 - path is the filename only (for example hello.txt)
@@ -359,14 +349,11 @@ The file hello.txt then contains exactly: hello Ruth
 Never put the filename in the file contents unless the user asked for that text. Do not add quotes, markdown, or extra lines the user did not ask for.
 
 Tools: when you need a tool, make a real tool call. Do not write tool JSON or XML in your reply. If you cannot call a tool natively, emit a single JSON object of the form {"name":"<tool>","arguments":{...}} and nothing else.
-The user can switch to cloud models with /models (ctrl+a lists integrations). To capture the screen or a webcam photo, use the screenshot or camera tools.
 
 Coding rules:
 - Read a file before you edit it.
-- Prefer edit or patch for existing files; write only for new files.
 - Make the smallest correct change.
 - After a tool result, keep going until the request is done.
-- After code changes, run tests or a typecheck when you can, and fix failures.
 - If a tool fails, change approach once; do not repeat the same call with the same arguments.
 """
 MODELFILE
@@ -506,10 +493,10 @@ log ""
 log "Next steps:"
 log "  1. source ~/.bashrc"
 log "  2. Close this terminal, open a new one, and type: Ruth"
-log "     (or: ruth, RUTH, or opencode — same program)"
+log "     (or: ruth or RUTH)"
 log "  3. (optional) gh auth login --web"
 log "Done."
-# Do not auto-launch the TUI. If this is a real terminal, tell him how to start.
+# Do not auto-launch the TUI. If this is a real terminal, tell the user how to start.
 if [ -t 1 ]; then
   log "Open a new terminal and type: ruth"
 fi
