@@ -1,6 +1,6 @@
 # ◆ ruth
 
-Installer and releases for Ruth, a local-first AI coding agent that runs entirely on your machine, with no cloud and no telemetry.
+Installer and releases for Ruth, a local-first all-purpose AI agent that runs entirely on your machine, with no cloud and no telemetry.
 
 ## Install
 
