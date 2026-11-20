@@ -1,6 +1,6 @@
 # Ruth installer
 
-Public, token-free installer and release assets for **Ruth**, a personal MIT-licensed fork of the archived [OpenCode](https://github.com/opencode-ai/opencode) Go / Bubble Tea TUI. The original copyright is retained; a 2026 copyright line for David Anderson is added.
+Public, token-free installer and release assets for **Ruth**, a personal MIT-licensed fork of the archived [OpenCode](https://github.com/opencode-ai/opencode) Go / Bubble Tea TUI. The original copyright is retained; a 2026 copyright line is added.
 
 Install on Chromebook Linux (or other linux-x64) with:
 
